@@ -1,5 +1,8 @@
 from fastapi import FastAPI
+from app.database import engine
+from sqlalchemy import text
 from app.config import settings
+from app.api import auth
 
 app = FastAPI(
     title="SocialAPI",
@@ -8,6 +11,7 @@ app = FastAPI(
     debug=settings.DEBUG
 )
 
+app.include_router(auth.router)
 
 @app.get("/")
 async def root():
@@ -23,4 +27,21 @@ async def health_check():
         "status" : "ok"
     }
 
+
+
+@app.get("/db-check")
+async def database_check():
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return {
+            "database": "connected",
+            "status": "ok"
+        }
+    except Exception as e:
+        return {
+            "database": "error",
+            "status": "failed",
+            "error": str(e)
+        }
 
