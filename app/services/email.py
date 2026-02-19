@@ -1,11 +1,15 @@
 import httpx
 import logging
 from app.config import settings
+from app.core.utils import mask_email
 
 logger = logging.getLogger(__name__)
 
 
 async def send_confirmation_email(email: str, confirmation_url) -> bool:
+
+    logger.info(f"📤 Sending confirmation email to {mask_email(email)}")
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -19,7 +23,7 @@ async def send_confirmation_email(email: str, confirmation_url) -> bool:
                         Please confirm your email by clicking the link below:
                         {confirmation_url}
                         
-                        This link will expire in 24 hours.
+                        This link will expire in 1 hour.
                         
                         If you didn't register, please ignore this email.
                         
@@ -31,11 +35,11 @@ async def send_confirmation_email(email: str, confirmation_url) -> bool:
             )
 
         response.raise_for_status()
-        logger.info(f"Confirmation email sent to {email}")
+        logger.info(f"✅ Confirmation email sent successfully to {mask_email(email)}")
         return True
 
     except Exception as e:
-        logger.error(f"Error sending confirmation email: {e}")
+        logger.error(f"❌ Failed to send email to {mask_email(email)}: {e}")
         return False
 
 

@@ -3,6 +3,7 @@ from app.database import engine
 from sqlalchemy import text
 from app.config import settings
 from app.api import auth
+from app.core.logging_config import setup_logging
 
 app = FastAPI(
     title="SocialAPI",
@@ -11,7 +12,9 @@ app = FastAPI(
     debug=settings.DEBUG
 )
 
+setup_logging()
 app.include_router(auth.router)
+
 
 @app.get("/")
 async def root():
