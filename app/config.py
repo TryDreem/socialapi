@@ -13,11 +13,10 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     ALGORITHM: str = "HS256"
 
-    # Email (optional) for now unused
-    SMTP_HOST: Optional[str] = None
-    SMTP_PORT: Optional[int] = None
-    SMTP_USER: Optional[str] = None
-    SMTP_PASSWORD: Optional[str] = None
+    #email (Mailgun)
+
+    MAILGUN_API_KEY: Optional[str] = None
+    MAILGUN_DOMAIN: Optional[str] = None
 
 
     model_config = SettingsConfigDict(

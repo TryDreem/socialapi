@@ -17,6 +17,36 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
+def create_confirmation_token(email: str) -> str:
+    expire = datetime.utcnow() + timedelta(hours=1)
+
+    payload = {
+        "sub": email,
+        "exp": expire,
+        "type": "confirmation"
+    }
+    token = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return token
+
+
+def decode_confirmation_token(token: str) -> str:
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+
+        token_type = payload.get("type")
+        if token_type != "confirmation":
+            raise HTTPException(status_code=403, detail="Invalid token type")
+
+        email = payload.get("sub")
+
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        return email
+
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid of expired token")
+
 
 def create_access_token(email: str) -> str:
 
@@ -34,9 +64,6 @@ def create_access_token(email: str) -> str:
 def decode_access_token(token: str) -> str:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        expire = payload.get("exp")
-        if expire < datetime.utcnow():
-            raise HTTPException(status_code=403, detail="Expired token")
 
         token_type = payload.get("type")
         if token_type != "access":
@@ -44,8 +71,11 @@ def decode_access_token(token: str) -> str:
 
         email = payload.get("sub")
 
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
         return email
 
     except JWTError:
-        raise HTTPException(status_code=403, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid of expired token")
 
