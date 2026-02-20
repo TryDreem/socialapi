@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from app.database import engine
 from sqlalchemy import text
 from app.config import settings
-from app.api import auth, posts
+from app.api import auth, posts, comments
 from app.core.logging_config import setup_logging
 
 app = FastAPI(
@@ -16,12 +16,14 @@ setup_logging()
 app.include_router(auth.router)
 app.include_router(posts.router)
 
+app.include_router(comments.router)
+
 
 @app.get("/")
 async def root():
     return{
         "message" : "SocialAPI is running",
-        "version": "1.0.0",
+        "version": "1.x.x",
         "environment": settings.ENV_STATE,
     }
 
