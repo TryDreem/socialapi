@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from app.database import engine
 from sqlalchemy import text
 from app.config import settings
-from app.api import auth, posts, comments
+from app.api import auth, posts, comments, likes
 from app.core.logging_config import setup_logging
 
 app = FastAPI(
@@ -13,10 +13,16 @@ app = FastAPI(
 )
 
 setup_logging()
-app.include_router(auth.router)
-app.include_router(posts.router)
 
-app.include_router(comments.router)
+all_routers = [
+    auth.router,
+    posts.router,
+    comments.router,
+    likes.router
+]
+
+for router in all_routers:
+    app.include_router(router)
 
 
 @app.get("/")

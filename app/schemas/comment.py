@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 from typing import List
 

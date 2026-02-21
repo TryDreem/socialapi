@@ -9,6 +9,7 @@ from app.database import Base
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.comment import Comment
+    from app.models.like import Like
 
 
 
@@ -36,6 +37,8 @@ class Post(Base):
 
     #one post has many comments and if delete post all comments will disappear
     comments: Mapped[list["Comment"]] = relationship(back_populates="post", cascade="all, delete-orphan")
+
+    likes: Mapped[list["Like"]] = relationship(back_populates="post", cascade="all, delete-orphan")
 
 
     def __repr__(self) -> str:

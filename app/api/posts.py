@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func
 
+from app.models import Like
 from app.schemas.post import PostResponse, PostCreate, PostsResponse, DeleteResponse
 from app.models.user import User
 from app.models.post import Post
@@ -45,11 +46,30 @@ async def get_all_posts(
 ):
     logger.info(f"Getting all posts")
 
-    query = select(Post).order_by(desc(Post.created_at)).limit(limit)
+    query = (
+        select(Post, func.count(Like.id).label("likes_count")) #COUNT(likes.id) AS likes_count
+        .outerjoin(Like, Post.id == Like.post_id)
+        .group_by(Post.id)
+        .order_by(desc(Post.created_at))
+        .limit(limit)
+    )
     result = await db.execute(query)
-    posts = result.scalars().all()
+    rows = result.all()
 
-    return PostsResponse(posts=posts)
+    post_data = []
+    for post, likes_count in rows:
+        post_dict = {
+            "id": post.id,
+            "body": post.body,
+            "user_id": post.user_id,
+            "created_at": post.created_at,
+            "updated_at": post.updated_at,
+            "likes_count": likes_count or 0  # 0 если None
+        }
+        post_data.append(post_dict)
+
+
+    return PostsResponse(posts=[PostResponse(**post) for post in post_data])
 
 
 @router.get("/{post_id}", response_model=PostResponse)
@@ -59,14 +79,32 @@ async def get_post(
 ):
     logger.info(f"Getting post with id {post_id}")
 
-    post = await db.get(Post, post_id)
+    query = (
+        select(Post, func.count(Like.id).label("likes_count")) #COUNT(likes.id) AS likes_count
+        .outerjoin(Like, Post.id == Like.post_id)
+        .where(Post.id == post_id)
+        .group_by(Post.id)
+    )
 
-    if not post:
+    result = await db.execute(query)
+    row = result.first()
+
+    if not row:
         logger.warning(f"Post with id {post_id} not found")
         raise HTTPException(status_code=404, detail="Post not found")
 
+    post, likes_count = row
 
-    return PostResponse.model_validate(post)
+    post_dict = {
+        "id": post.id,
+        "body": post.body,
+        "user_id": post.user_id,
+        "created_at": post.created_at,
+        "updated_at": post.updated_at,
+        "likes_count": likes_count or 0
+    }
+
+    return PostResponse(**post_dict)
 
 
 @router.delete("/{post_id}",response_model=DeleteResponse, status_code=200)

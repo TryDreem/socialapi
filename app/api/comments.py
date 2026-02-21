@@ -48,7 +48,7 @@ async def create_comment(
 
 
 
-@router.get("/{post_id}/comments", response_model=CommentsResponse, status_code=201)
+@router.get("/{post_id}/comments", response_model=CommentsResponse, status_code=200)
 async def get_all_comments(
         post_id: int,
         limit: int = 20,

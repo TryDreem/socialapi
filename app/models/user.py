@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.models.post import Post
     from app.models.comment import Comment
+    from app.models.like import Like
 
 
 class User(Base):
@@ -30,6 +31,9 @@ class User(Base):
 
     comments: Mapped[list["Comment"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
-    def __repr__(self):
+    likes: Mapped[list["Like"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+
+def __repr__(self):
         return f"<User(id={self.id}, email={self.email})>"
 
