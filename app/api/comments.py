@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from sqlalchemy import select, desc
@@ -8,6 +8,7 @@ from app.schemas.comment import CommentResponse, CommentCreate, CommentsResponse
 from app.models.user import User
 from app.models.comment import Comment
 from app.api.deps import get_current_user
+from app.core.rate_limit import limiter
 
 import logging
 
@@ -18,7 +19,9 @@ router = APIRouter(prefix="/post", tags=["comment"])
 
 
 @router.post("/{post_id}/comments", response_model=CommentResponse, status_code=201)
+@limiter.limit("30/minute")
 async def create_comment(
+        request: Request,
         post_id: int,
         comment: CommentCreate,
         current_user: User = Depends(get_current_user),

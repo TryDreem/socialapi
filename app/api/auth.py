@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.utils import mask_email
 from app.core.security import get_password_hash, create_confirmation_token, decode_confirmation_token,verify_password, create_access_token
@@ -8,6 +8,7 @@ from app.schemas.user import UserRegister, UserResponse, UserLogin, Token
 from app.models.user import User
 from app.api.deps import get_current_user
 from app.services.email import send_confirmation_email
+from app.core.rate_limit import limiter
 
 
 import logging
@@ -18,7 +19,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=UserResponse, status_code=201)
-async def register(user: UserRegister, background_tasks: BackgroundTasks,db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/hour")
+async def register(request: Request, user: UserRegister, background_tasks: BackgroundTasks,db: AsyncSession = Depends(get_db)):
 
     logger.info(f"📝 Registration attempt for {mask_email(user.email)}")
 
@@ -58,7 +60,8 @@ async def register(user: UserRegister, background_tasks: BackgroundTasks,db: Asy
 
 
 @router.post("/login", response_model=Token, status_code=200)
-async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
+@limiter.limit("10/minute")
+async def login(request: Request, credentials: UserLogin, db: AsyncSession = Depends(get_db)):
     logger.info(f"🔐 Login attempt for {mask_email(credentials.email)}")
 
     query = select(User).where(User.email == credentials.email)
@@ -113,7 +116,9 @@ async def confirm_email(token: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserResponse, status_code=200)
+@limiter.limit("10/minute")
 async def get_current_user_info(
+        request: Request,
         current_user: User = Depends(get_current_user)
 ):
     logger.info(f"👤 User info requested for {mask_email(current_user.email)} (id={current_user.id})")

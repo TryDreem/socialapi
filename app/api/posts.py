@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from sqlalchemy import select, desc, func
@@ -8,6 +8,7 @@ from app.schemas.post import PostResponse, PostCreate, PostsResponse, DeleteResp
 from app.models.user import User
 from app.models.post import Post
 from app.api.deps import get_current_user
+from app.core.rate_limit import limiter
 
 
 
@@ -19,7 +20,9 @@ router = APIRouter(prefix="/post", tags=["post"])
 
 
 @router.post("", response_model=PostResponse, status_code=201)
+@limiter.limit("20/minute")
 async def create_post(
+        request: Request,
         post: PostCreate,
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
