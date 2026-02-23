@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from sqlalchemy import select, desc, func
+from enum import Enum
 
 from app.models import Like
 from app.schemas.post import PostResponse, PostCreate, PostsResponse, DeleteResponse
@@ -9,7 +10,7 @@ from app.models.user import User
 from app.models.post import Post
 from app.api.deps import get_current_user
 from app.core.rate_limit import limiter
-
+from app.schemas.pagination import PaginatedResponse
 
 
 import logging
@@ -17,6 +18,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/post", tags=["post"])
+
+
+class PostSortBy(str, Enum):
+    newest = "newest"
+    oldest = "oldest"
+    most_liked = "most_liked"
+
+
 
 
 @router.post("", response_model=PostResponse, status_code=201)
@@ -42,19 +51,37 @@ async def create_post(
 
     return PostResponse.model_validate(db_post)
 
-@router.get("", response_model=PostsResponse, status_code=200)
+@router.get("", response_model=PaginatedResponse[PostResponse], status_code=200)
 async def get_all_posts(
-        limit: int = 20,
+        page: int = Query(1, ge=1, description="Page number"),
+        page_size: int = Query(20, ge=1, le=100, description="Page size"),
+        sort_by: PostSortBy = Query(PostSortBy.most_liked),
         db: AsyncSession = Depends(get_db)
+        #ge greater or equal (>=1)
 ):
-    logger.info(f"Getting all posts")
+    logger.info(f"Getting posts (page={page}, page_size={page_size})")
+
+    offset = (page - 1) * page_size
+
+    count_query = select(func.count(Like.id))
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+
+    if sort_by == PostSortBy.newest:
+        order_clause = desc(Post.created_at)
+    elif sort_by == PostSortBy.oldest:
+        order_clause = Post.created_at
+    else:
+        order_clause = desc("likes_count")
+
 
     query = (
         select(Post, func.count(Like.id).label("likes_count")) #COUNT(likes.id) AS likes_count
         .outerjoin(Like, Post.id == Like.post_id)
         .group_by(Post.id)
-        .order_by(desc(Post.created_at))
-        .limit(limit)
+        .order_by(order_clause)
+        .limit(page_size)
+        .offset(offset)
     )
     result = await db.execute(query)
     rows = result.all()
@@ -71,9 +98,16 @@ async def get_all_posts(
         }
         post_data.append(post_dict)
 
+    total_pages = (total + page_size - 1) // page_size
 
-    return PostsResponse(posts=[PostResponse(**post) for post in post_data])
 
+    return PaginatedResponse(
+        items=post_data,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 @router.get("/{post_id}", response_model=PostResponse)
 async def get_post(

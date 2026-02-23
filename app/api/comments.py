@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func
+from app.schemas.pagination import PaginatedResponse
 
 from app.models import Post
 from app.schemas.comment import CommentResponse, CommentCreate, CommentsResponse
@@ -51,21 +52,49 @@ async def create_comment(
 
 
 
-@router.get("/{post_id}/comments", response_model=CommentsResponse, status_code=200)
+@router.get("/{post_id}/comments", response_model=PaginatedResponse[CommentResponse], status_code=200)
 async def get_all_comments(
         post_id: int,
-        limit: int = 20,
+        page: int = Query(1, ge=1),
+        page_size: int = Query(20, ge=1, le=100),
         db: AsyncSession = Depends(get_db),
 ):
-    query = select(Comment).where(Comment.post_id == post_id).order_by(desc(Comment.created_at)).limit(limit)
+    logger.info(f"📋 Getting comments for post {post_id} (page={page}, page_size={page_size})")
+
+    post = await db.get(Post, post_id)
+
+    if not post:
+        logger.info(f"Post {post_id} not found")
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    offset = (page - 1) * page_size
+
+    count_query = select(func.count(Comment.id)).where(Comment.post_id==post_id)
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+
+    query = (select(Comment)
+    .where(Comment.post_id==post_id)
+    .order_by(Comment.created_at)
+    .limit(page_size)
+    .offset(offset)
+    )
+
     result = await db.execute(query)
     comments = result.scalars().all()
 
-    if not comments:
-        logger.info(f"No comments for post {post_id}")
-        raise HTTPException(status_code=404, detail="No comments found")
+    comments_data = [CommentResponse.model_validate(c) for c in comments]
 
-    return CommentsResponse(comments=comments)
+    total_pages = (total + page_size - 1) // page_size
+
+    return PaginatedResponse(
+        items=comments_data,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages
+    )
+
 
 
 @router.delete("/{post_id}/comments/{comment_id}", status_code=204)
