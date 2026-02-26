@@ -63,7 +63,7 @@ async def get_all_posts(
 
     offset = (page - 1) * page_size
 
-    count_query = select(func.count(Like.id))
+    count_query = select(func.count(Post.id))
     total_result = await db.execute(count_query)
     total = total_result.scalar()
 
