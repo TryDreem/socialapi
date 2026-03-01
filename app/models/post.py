@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
-from annotated_types.test_cases import cases
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import String, ForeignKey, Text
 from app.database import Base

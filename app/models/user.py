@@ -34,6 +34,6 @@ class User(Base):
     likes: Mapped[list["Like"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
-def __repr__(self):
-        return f"<User(id={self.id}, email={self.email})>"
+    def __repr__(self):
+            return f"<User(id={self.id}, email={self.email})>"
 
