@@ -6,28 +6,26 @@ on:
   pull_request:
     branches: [main]
 
-  jobs:
-    test:
-      runs-on: ubuntu-latest
+jobs:
+  test:
+    runs-on: ubuntu-latest
 
-      steps:
-        - name: Checkout code
-          uses: actions/checkout@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-        - name: Setup Python
-          uses: actions/setup-python@v5
-          with:
-            python-version: "3.11"
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-        - name: Install dependencies
-          run: |
-            pip install -r requirements.txt
-            pip install aiosqlite
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install aiosqlite
 
-        - name: Run tests
-          run: pytest tests/ -v
-          env:
-            SECRET_KEY: "test-secret-key-for-ci"
-            DATABASE_URL: "sqlite+aiosqlite:///file::memory:?cache=shared"
-
-
+      - name: Run tests
+        run: pytest tests/ -v
+        env:
+          SECRET_KEY: "test-secret-key-for-ci"
+          DATABASE_URL: "sqlite+aiosqlite:///file::memory:?cache=shared"
