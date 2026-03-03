@@ -13,6 +13,19 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+  api:
+    build: .
+    container_name: socialapi_api
+    restart: always
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://vlad:1234@postgres:5432/socialapi"
+      SECRET_KEY: "34c78a333215da001ec1d95a6ad15b7122d699291660d1ef9a119bf4064459a7"
+      ENV_STATE: "dev"
+      DEBUG: "True"
 
 volumes:
   postgres_data:
