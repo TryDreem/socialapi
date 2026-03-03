@@ -32,7 +32,7 @@ async def create_comment(
     post = await db.get(Post, post_id)
 
     if not post:
-        logger.info(f"Post {comment.post_id} not found")
+        logger.info(f"Post {post_id} not found")
         raise HTTPException(status_code=404, detail="Post not found")
 
     db_comment = Comment(

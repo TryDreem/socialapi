@@ -111,3 +111,14 @@ async def auth_headers(client, test_user, db_session):
     token = response.json()["access_token"]
 
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def test_post(client, auth_headers):
+    post_data = {
+        "body": "test post"
+    }
+
+    response = await client.post("/post", json=post_data, headers=auth_headers)
+    assert response.status_code == 201
+    return response.json()
