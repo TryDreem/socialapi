@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database import get_db
 from sqlalchemy import select, desc, func
 from enum import Enum
-
+import json
 from app.models import Like
 from app.schemas.post import PostResponse, PostCreate, PostsResponse, DeleteResponse
 from app.models.user import User
@@ -11,6 +12,8 @@ from app.models.post import Post
 from app.api.deps import get_current_user
 from app.core.rate_limit import limiter
 from app.schemas.pagination import PaginatedResponse
+from app.core.redis import cache_get, cache_set, cache_pattern_delete
+from fastapi.encoders import jsonable_encoder
 
 
 import logging
@@ -49,6 +52,9 @@ async def create_post(
     await db.commit()
     await db.refresh(db_post)
 
+    await cache_pattern_delete("cache:posts:*")
+    logger.info(f"Cache pattern cleared in Redis")
+
     return PostResponse.model_validate(db_post)
 
 @router.get("", response_model=PaginatedResponse[PostResponse], status_code=200)
@@ -61,11 +67,19 @@ async def get_all_posts(
 ):
     logger.info(f"Getting posts (page={page}, page_size={page_size})")
 
-    offset = (page - 1) * page_size
+    cache_key = f"cache:posts:page:{page}:page_size:{page_size}:sort_by:{sort_by}"
+
+    cached_posts = await cache_get(cache_key)
+    if cached_posts:
+        logger.info(f"Found cached posts (page={page}, page_size={page_size})")
+        return json.loads(cached_posts)
 
     count_query = select(func.count(Post.id))
     total_result = await db.execute(count_query)
     total = total_result.scalar()
+
+    offset = (page - 1) * page_size
+
 
     if sort_by == PostSortBy.newest:
         order_clause = desc(Post.created_at)
@@ -100,8 +114,7 @@ async def get_all_posts(
 
     total_pages = (total + page_size - 1) // page_size
 
-
-    return PaginatedResponse(
+    response = PaginatedResponse(
         items=post_data,
         total=total,
         page=page,
@@ -109,12 +122,28 @@ async def get_all_posts(
         total_pages=total_pages,
     )
 
+    # jsonable_encoder(response):
+    # "created_at": datetime(2026, 3, 8, 22, 13, 50) -> "items": [{"id": 1, "created_at": "2026-03-08T22:13:50"
+    # json.dumps(...)  turns it into string
+    await cache_set(cache_key, json.dumps(jsonable_encoder(response)))
+    logger.info(f"Posts were saved to cache Redis")
+
+    return response
+
 @router.get("/{post_id}", response_model=PostResponse)
 async def get_post(
         post_id: int,
         db: AsyncSession = Depends(get_db),
 ):
     logger.info(f"Getting post with id {post_id}")
+
+    cache_key = f"cache:posts:post:{post_id}"
+    cached = await cache_get(cache_key)
+
+    if cached:
+        logger.info(f"Found cached post with id {post_id}")
+        return json.loads(cached)
+
 
     query = (
         select(Post, func.count(Like.id).label("likes_count")) #COUNT(likes.id) AS likes_count
@@ -141,7 +170,12 @@ async def get_post(
         "likes_count": likes_count or 0
     }
 
-    return PostResponse(**post_dict)
+    response = PostResponse(**post_dict)
+
+    logger.info(f"Post was saved to Redis")
+    await cache_set(cache_key, json.dumps(jsonable_encoder(response)))
+
+    return response
 
 
 @router.delete("/{post_id}",response_model=DeleteResponse, status_code=200)
@@ -167,6 +201,9 @@ async def delete_post(
     await db.commit()
 
     logger.info(f"Deleted post with id {post_id}")
+
+    await cache_pattern_delete("cache:posts:*")
+    logger.info(f"Cache pattern deleted")
 
     return DeleteResponse.model_validate({"message": f"Post (id: {post_id}) deleted successfully"})
 

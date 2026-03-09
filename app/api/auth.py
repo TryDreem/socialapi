@@ -1,10 +1,13 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.redis import set_refresh_token, get_refresh_token, delete_refresh_token
 from app.core.utils import mask_email
-from app.core.security import get_password_hash, create_confirmation_token, decode_confirmation_token,verify_password, create_access_token
+from app.core.security import get_password_hash, create_confirmation_token, decode_confirmation_token, verify_password, \
+    create_access_token, create_refresh_token, decode_refresh_token
 from app.database import get_db
 from sqlalchemy import select
-from app.schemas.user import UserRegister, UserResponse, UserLogin, Token
+from app.schemas.user import UserRegister, UserResponse, UserLogin, Token, TokenPair, RefreshToken
 from app.models.user import User
 from app.api.deps import get_current_user
 from app.services.email import send_confirmation_email
@@ -59,7 +62,7 @@ async def register(request: Request, user: UserRegister, background_tasks: Backg
 
 
 
-@router.post("/login", response_model=Token, status_code=200)
+@router.post("/login", response_model=TokenPair, status_code=200)
 @limiter.limit("10/minute")
 async def login(request: Request, credentials: UserLogin, db: AsyncSession = Depends(get_db)):
     logger.info(f"🔐 Login attempt for {mask_email(credentials.email)}")
@@ -80,10 +83,13 @@ async def login(request: Request, credentials: UserLogin, db: AsyncSession = Dep
         logger.warning(f"⚠️ Login failed: email not confirmed for {mask_email(credentials.email)}")
         raise HTTPException(status_code=400, detail="Email not confirmed")
 
-    token = create_access_token(user.email)
+    access_token, refresh_token = create_access_token(user.email), create_refresh_token(user.email)
+
+    await set_refresh_token(user.email, refresh_token)
+
     logger.info(f"✅ Login successful for {mask_email(credentials.email)} (id={user.id})")
 
-    return Token(access_token=token)
+    return TokenPair(access_token=access_token, refresh_token=refresh_token)
 
 
 
@@ -123,3 +129,50 @@ async def get_current_user_info(
 ):
     logger.info(f"👤 User info requested for {mask_email(current_user.email)} (id={current_user.id})")
     return UserResponse.model_validate(current_user)
+
+
+@router.post("/refresh", response_model=TokenPair, status_code=200)
+async def refresh_token_endpoint(
+        request: Request,
+        refresh_token: RefreshToken,
+        db: AsyncSession = Depends(get_db),
+):
+
+    logger.info("User trying to get access token using refresh token")
+
+    email = decode_refresh_token(refresh_token.refresh_token)
+
+    refresh_token_checker = await get_refresh_token(email)
+
+    if not refresh_token_checker or refresh_token_checker != refresh_token.refresh_token:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    await delete_refresh_token(email)
+
+    new_access_token, new_refresh_token = create_access_token(email), create_refresh_token(email)
+
+    await set_refresh_token(email, new_refresh_token)
+
+    return TokenPair(access_token=new_access_token, refresh_token=new_refresh_token)
+
+
+
+@router.post("/logout", status_code=200)
+async def logout(request: Request,
+                 current_user: User = Depends(get_current_user),
+                 ):
+
+    email = current_user.email
+
+    await delete_refresh_token(email)
+
+    return {"message": "Logged out successfully"}
+
+
+
+
+
+
+
+
+
