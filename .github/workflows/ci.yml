@@ -29,3 +29,4 @@ jobs:
         env:
           SECRET_KEY: "test-secret-key-for-ci"
           DATABASE_URL: "sqlite+aiosqlite:///file::memory:?cache=shared"
+          REDIS_URL: "redis://localhost:6379"

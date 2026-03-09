@@ -27,7 +27,6 @@ async def send_confirmation_email(email: str, confirmation_url) -> bool:
                         
                         If you didn't register, please ignore this email.
                         
-                        Best regards,
                         SocialAPI Team
                     """
 

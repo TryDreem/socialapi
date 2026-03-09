@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redis import set_refresh_token, get_refresh_token, delete_refresh_token
@@ -7,12 +7,11 @@ from app.core.security import get_password_hash, create_confirmation_token, deco
     create_access_token, create_refresh_token, decode_refresh_token
 from app.database import get_db
 from sqlalchemy import select
-from app.schemas.user import UserRegister, UserResponse, UserLogin, Token, TokenPair, RefreshToken
+from app.schemas.user import UserRegister, UserResponse, UserLogin, TokenPair, RefreshToken
 from app.models.user import User
 from app.api.deps import get_current_user
-from app.services.email import send_confirmation_email
 from app.core.rate_limit import limiter
-
+from app.tasks.email import send_confirmation_email_task
 
 import logging
 
@@ -23,7 +22,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=UserResponse, status_code=201)
 @limiter.limit("5/hour")
-async def register(request: Request, user: UserRegister, background_tasks: BackgroundTasks,db: AsyncSession = Depends(get_db)):
+async def register(request: Request, user: UserRegister,db: AsyncSession = Depends(get_db)):
 
     logger.info(f"📝 Registration attempt for {mask_email(user.email)}")
 
@@ -53,9 +52,7 @@ async def register(request: Request, user: UserRegister, background_tasks: Backg
 
     confirmation_url = f"http://localhost:8000/auth/confirm?token={confirmation_token}"
 
-    background_tasks.add_task(send_confirmation_email,
-                              user.email,
-                              confirmation_url)
+    send_confirmation_email_task.delay(user.email, confirmation_url)
     logger.info(f"📧 Confirmation email scheduled for {mask_email(user.email)}")
 
     return UserResponse.model_validate(db_user)
