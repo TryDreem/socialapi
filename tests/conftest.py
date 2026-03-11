@@ -5,7 +5,7 @@ import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import StaticPool
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 
 os.environ["ENV_STATE"] = "test"
 
@@ -89,7 +89,9 @@ async def mock_redis():
     with patch("app.api.posts.cache_get", return_value=None), \
          patch("app.api.posts.cache_set", new_callable=AsyncMock), \
          patch("app.api.posts.cache_pattern_delete", new_callable=AsyncMock), \
-         patch("app.api.auth.set_refresh_token", new_callable=AsyncMock):
+         patch("app.api.auth.set_refresh_token", new_callable=AsyncMock), \
+         patch("app.api.auth.send_confirmation_email_task") as mock_task:
+        mock_task.delay = MagicMock()
         yield
 
 
