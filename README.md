@@ -9,6 +9,9 @@ A RESTful API for a microblogging platform built with FastAPI. Supports user aut
 - **SQLAlchemy** — ORM
 - **Alembic** — database migrations
 - **JWT** — authentication
+- **Redis** — caching & refresh tokens
+- **Celery** — background tasks (email)
+- **Nginx** — reverse proxy
 - **Docker** — containerization
 - **GitHub Actions** — CI/CD
 
@@ -22,37 +25,37 @@ A RESTful API for a microblogging platform built with FastAPI. Supports user aut
 
 1. Clone the repository
 ```bash
-   git clone https://github.com/TryDreem/socialapi.git
-   cd socialapi
+git clone https://github.com/TryDreem/socialapi.git
+cd socialapi
 ```
 
 2. Create `.env` file in the root directory
 ```
-   ENV_STATE=dev
-   DEBUG=True
-   SECRET_KEY=your-secret-key
-   DATABASE_URL=postgresql+asyncpg://username:1234@postgres:5432/socialapi
-   MAILGUN_API_KEY=your-mailgun-api-key
-   MAILGUN_DOMAIN=your-mailgun-domain
-   ACCESS_TOKEN_EXPIRE_MINUTES=30
-   REFRESH_TOKEN_EXPIRE_DAYS=7
+ENV_STATE=dev
+DEBUG=True
+SECRET_KEY=your-secret-key
+DATABASE_URL=postgresql+asyncpg://username:1234@postgres:5432/socialapi
+REDIS_URL=redis://redis:6379
+MAILGUN_API_KEY=your-mailgun-api-key
+MAILGUN_DOMAIN=your-mailgun-domain
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
 ```
 
 3. Start the application
 ```bash
-   docker-compose up --build
+docker-compose up --build
 ```
 
-4. Open API docs at `http://localhost:8000/docs`
+4. Open API docs at `http://localhost/docs`
 
 > **Note:** Email confirmation requires Mailgun credentials.
 > If you don't have them, you can confirm email manually via SQL:
 > ```bash
 > docker exec -it socialapi_db psql -U username -d socialapi
 > UPDATE users SET is_confirmed = true WHERE email = 'your@email.com';
-> 
-> Replace `username` with `POSTGRES_USER` value from your `docker-compose.yml`
 > ```
+> Replace `username` with `POSTGRES_USER` value from your `docker-compose.yml`
 
 ## API Endpoints
 
@@ -60,9 +63,11 @@ A RESTful API for a microblogging platform built with FastAPI. Supports user aut
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/auth/register` | Register a new user |
-| POST | `/auth/login` | Login and get access token |
+| POST | `/auth/login` | Login and get token pair |
 | GET | `/auth/confirm` | Confirm email |
 | GET | `/auth/me` | Get current user info |
+| POST | `/auth/refresh` | Refresh access token |
+| POST | `/auth/logout` | Logout |
 
 ### Posts
 | Method | Endpoint | Description |
@@ -90,3 +95,13 @@ A RESTful API for a microblogging platform built with FastAPI. Supports user aut
 ```bash
 pytest tests/ -v
 ```
+
+## Load Testing
+```bash
+k6 run load_test.js
+```
+
+Results (100 VUs, 2.5 minutes):
+- **Requests/sec:** 1054
+- **Avg response time:** 46ms
+- **Failed requests:** 0%
