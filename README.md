@@ -2,6 +2,9 @@
 
 A RESTful API for a microblogging platform built with FastAPI. Supports user authentication, posts, comments, and likes.
 
+## Live Demo
+API is live at: https://socialapi-wbc3.onrender.com/docs
+
 ## Tech Stack
 
 - **FastAPI** — web framework
