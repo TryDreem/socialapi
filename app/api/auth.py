@@ -12,7 +12,7 @@ from app.models.user import User
 from app.api.deps import get_current_user
 from app.core.rate_limit import limiter
 from app.tasks.email import send_confirmation_email_task
-
+from app.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -164,6 +164,24 @@ async def logout(request: Request,
     await delete_refresh_token(email)
 
     return {"message": "Logged out successfully"}
+
+
+@router.post("/confirm-dev/{email}",status_code=200)
+async def confirm_email_dev(email: str, db: AsyncSession = Depends(get_db)):
+    if settings.ENV_STATE != "dev":
+        raise HTTPException(status_code=401, detail="Invalid token")
+    query = select(User).where(User.email == email)
+    result = await db.execute(query)
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.is_confirmed = True
+
+    await db.commit()
+
+    return {"message": "Email confirmed"}
+
 
 
 

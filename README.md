@@ -68,6 +68,7 @@ docker-compose up --build
 | GET | `/auth/me` | Get current user info |
 | POST | `/auth/refresh` | Refresh access token |
 | POST | `/auth/logout` | Logout |
+| POST | `/auth/confirm-dev/{email}` | Confirm email (dev only) |
 
 ### Posts
 | Method | Endpoint | Description |
