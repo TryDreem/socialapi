@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from app.models.post import Post
     from app.models.comment import Comment
     from app.models.like import Like
+    from app.models.follow import Follow
 
 
 class User(Base):
@@ -32,6 +33,10 @@ class User(Base):
     comments: Mapped[list["Comment"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
     likes: Mapped[list["Like"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+    followers: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.following_id", back_populates="follower")
+
+    following: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.follower_id",back_populates="following")
 
 
     def __repr__(self):

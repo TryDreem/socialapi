@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,7 +8,7 @@ from sqlalchemy import select, desc, func
 from enum import Enum
 import json
 from app.models import Like
-from app.schemas.post import PostResponse, PostCreate, PostsResponse, DeleteResponse
+from app.schemas.post import PostResponse, PostCreate, PostsResponse, PostUpdate
 from app.models.user import User
 from app.models.post import Post
 from app.api.deps import get_current_user
@@ -178,7 +180,7 @@ async def get_post(
     return response
 
 
-@router.delete("/{post_id}",response_model=DeleteResponse, status_code=200)
+@router.delete("/{post_id}", status_code=204)
 async def delete_post(
         post_id: int,
         current_user: User = Depends(get_current_user),
@@ -205,5 +207,45 @@ async def delete_post(
     await cache_pattern_delete("cache:posts:*")
     logger.info(f"Cache pattern deleted")
 
-    return DeleteResponse.model_validate({"message": f"Post (id: {post_id}) deleted successfully"})
+    return
+
+
+@router.patch("/{post_id}", response_model=PostResponse, status_code=200)
+async def update_post(
+        post_id: int,
+        post_data: PostUpdate,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+):
+    logger.info(f"Getting post with id {post_id}")
+
+    post = await db.get(Post, post_id)
+
+    if not post:
+        logger.warning(f"Post with id {post_id} not found")
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    if post.user_id != current_user.id:
+        logger.warning("User not allowed to update post")
+        raise HTTPException(status_code=403, detail="Not authorized to update this post")
+
+    updates = post_data.model_dump(exclude_unset=True)
+
+    if not updates:
+        raise HTTPException(status_code=404, detail="No fields to update")
+
+    for key, value in updates.items():
+        setattr(post, key, value)
+
+    post.updated_at = datetime.now()
+
+    await db.commit()
+    await db.refresh(post)
+
+    await cache_pattern_delete("cache:posts:*")
+    logger.info(f"Cache pattern cleared in Redis")
+
+
+    return PostResponse.model_validate(post)
+
 

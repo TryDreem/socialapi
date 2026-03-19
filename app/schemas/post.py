@@ -10,9 +10,9 @@ class PostCreate(BaseModel):
     @classmethod
     def validate_body(cls, v):
         if not v or not v.strip():
-            raise ValidationError("Post body cannot be empty")
+            raise ValueError("Post body cannot be empty")
         if len(v) > 500:
-            raise ValidationError("Post body cannot be longer than 500 characters")
+            raise ValueError("Post body cannot be longer than 500 characters")
         return v.strip()
 
 class PostUpdate(BaseModel):
@@ -32,7 +32,3 @@ class PostResponse(BaseModel):
 class PostsResponse(BaseModel):
     posts: List[PostResponse]
 
-
-
-class DeleteResponse(BaseModel):
-    message: str
