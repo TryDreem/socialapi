@@ -101,10 +101,6 @@ async def get_followers(
     result = await db.execute(query)
     followers = result.scalars().all()
 
-    if not followers:
-        logger.warning(f"User {user_id} is not followed")
-
-
     return FollowersResponse(followers=followers)
 
 

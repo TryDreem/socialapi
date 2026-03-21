@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+
+from app.api.posts import feed_router
 from app.core.rate_limit import limiter
 from app.database import engine
 from sqlalchemy import text
@@ -26,6 +28,7 @@ all_routers = [
     comments.router,
     likes.router,
     follows.router,
+    feed_router
 ]
 
 for router in all_routers:
