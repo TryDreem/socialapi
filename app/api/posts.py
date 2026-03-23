@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request,
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from sqlalchemy import select, desc, func
+from sqlalchemy import select, desc, func, text
 from enum import Enum
 import json
 from app.models import Like
@@ -62,6 +62,82 @@ async def create_post(
 
     return PostResponse.model_validate(db_post)
 
+
+@router.get("/search", response_model=PaginatedResponse[PostResponse], status_code=200)
+async def search_posts(
+        page: int = Query(1, ge=1),
+        page_size: int = Query(20, ge=1, le=100),
+        q: str = Query(..., min_length=1),
+        sort_by: PostSortBy = Query(PostSortBy.most_liked),
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+
+    logger.info(f"Getting feed for user {current_user.id}")
+
+    cache_key = f"cache:search:{q}:page{page}:page_size:{page_size}:sort_by:{sort_by}"
+    cached = await cache_get(cache_key)
+    if cached:
+        logger.info(f"Searched posts found in cache")
+        return json.loads(cached)
+
+    count_query = (
+        select(func.count(Post.id))
+        .where(Post.body.like(f"%{q}%"))
+    )
+    total_result = await db.execute(count_query)
+    total = total_result.scalar()
+
+
+    offset = (page - 1) * page_size
+
+    if sort_by == PostSortBy.newest:
+        order_clause = desc(Post.created_at)
+    elif sort_by == PostSortBy.oldest:
+        order_clause = Post.created_at
+    else:
+        order_clause = desc(text("likes_count"))
+
+    query = (
+        select(Post, func.count(Like.id).label("likes_count"))
+        .where(Post.body.ilike(f"%{q}%"))
+        .outerjoin(Like, Post.id == Like.post_id)
+        .group_by(Post.id)
+        .order_by(order_clause)
+        .limit(page_size)
+        .offset(offset)
+    )
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    posts_data = []
+    for post, likes_count in rows:
+        post_dict = {
+            "id": post.id,
+            "body": post.body,
+            "user_id": post.user_id,
+            "created_at": post.created_at,
+            "updated_at": post.updated_at,
+            "likes_count": likes_count or 0
+        }
+        posts_data.append(post_dict)
+
+    total_pages = (total + page_size - 1) // page_size
+
+    response = PaginatedResponse(
+        items=posts_data,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
+
+    await cache_set(cache_key, json.dumps(jsonable_encoder(response)))
+
+    return response
+
+
 @router.get("", response_model=PaginatedResponse[PostResponse], status_code=200)
 async def get_all_posts(
         page: int = Query(1, ge=1, description="Page number"),
@@ -91,7 +167,7 @@ async def get_all_posts(
     elif sort_by == PostSortBy.oldest:
         order_clause = Post.created_at
     else:
-        order_clause = desc("likes_count")
+        order_clause = desc(text("likes_count"))
 
 
     query = (
@@ -315,6 +391,15 @@ async def get_feed(
     await cache_set(cache_key, json.dumps(jsonable_encoder(response)))
 
     return response
+
+
+
+
+
+
+
+
+
 
 
 
