@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, field_validator, ConfigDict, ValidationError
 from datetime import datetime
 from typing import List
+from enum import Enum
 
 
 class PostCreate(BaseModel):
@@ -32,3 +33,9 @@ class PostResponse(BaseModel):
 class PostsResponse(BaseModel):
     posts: List[PostResponse]
 
+
+
+class PostSortBy(str, Enum):
+    newest = "newest"
+    oldest = "oldest"
+    most_liked = "most_liked"
