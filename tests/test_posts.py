@@ -82,5 +82,5 @@ async def test_delete_post(client, auth_headers):
         headers=auth_headers,
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 204
 

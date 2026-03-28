@@ -86,9 +86,9 @@ async def client(db_session):
 
 @pytest_asyncio.fixture(autouse=True)
 async def mock_redis():
-    with patch("app.api.posts.cache_get", return_value=None), \
-         patch("app.api.posts.cache_set", new_callable=AsyncMock), \
-         patch("app.api.posts.cache_pattern_delete", new_callable=AsyncMock), \
+    with patch("app.services.post_service.cache_get", return_value=None), \
+         patch("app.services.post_service.cache_set", new_callable=AsyncMock), \
+         patch("app.services.post_service.cache_pattern_delete", new_callable=AsyncMock), \
          patch("app.api.auth.set_refresh_token", new_callable=AsyncMock), \
          patch("app.api.auth.send_confirmation_email_task") as mock_task:
         mock_task.delay = MagicMock()

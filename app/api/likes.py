@@ -9,10 +9,14 @@ from app.schemas.like import LikeResponse, LikeCountResponse
 from app.models.user import User
 from app.core.rate_limit import limiter
 from app.api.deps import get_current_user
+from app.services.like_service import LikeService
 
 import logging
 
+from app.services.post_service import PostService
+
 logger = logging.getLogger(__name__)
+service = LikeService()
 
 router = APIRouter(prefix="/post", tags=["like"])
 
@@ -25,31 +29,12 @@ async def post_like(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    post = await db.get(Post, post_id)
-
-    if not post:
-        logger.warning(f"post {post_id} not found")
-        raise HTTPException(status_code=404, detail="Post not found")
-
-    db_like = Like(
-        post_id=post_id,
-        user_id=current_user.id
-    )
-
-    try:
-        db.add(db_like)
-        await db.commit()
-        await db.refresh(db_like)
-
-    except IntegrityError:
-        await db.rollback()
-        logger.warning(f"like to post {post_id} already exists")
-        raise HTTPException(status_code=409, detail="Post already liked")
-
-
-    logger.info(f"post {post_id} liked")
-
-    return LikeResponse.model_validate(db_like)
+   result = await service.post_like(db=db, post_id=post_id, current_user=current_user)
+   if not result:
+       raise HTTPException(status_code=404, detail="Post not found")
+   elif result == "post already exists":
+       raise HTTPException(status_code=409, detail="Post already exists")
+   return result
 
 
 @router.delete("/{post_id}/like",status_code=204)
@@ -58,31 +43,12 @@ async def delete_like(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db)
 ):
-    post = await db.get(Post, post_id)
-
-    if not post:
-        logger.warning(f"post {post_id} not found")
-        raise HTTPException(status_code=404, detail="Post not found")
-
-
-    query = select(Like).where(
-        Like.user_id == current_user.id,
-        Like.post_id == post.id
-    )
-    result = await db.execute(query)
-    like = result.scalar_one_or_none()
-
-    if not like:
-        logger.warning(f"like {post_id} not found")
-        raise HTTPException(status_code=404, detail="like not found")
-
-
-    await db.delete(like)
-    await db.commit()
-
-    logger.info(f"post {post_id} unliked by {current_user.id}")
-
-    return
+   result = await service.delete_like(post_id=post_id, current_user=current_user, db=db)
+   if result == "post not found":
+       raise HTTPException(status_code=404, detail="Post not found")
+   elif result == "like not found":
+       raise HTTPException(status_code=404, detail="Like not found")
+   return result
 
 
 @router.get("/{post_id}/like", response_model=LikeCountResponse)
@@ -90,16 +56,10 @@ async def get_likes_count(
         post_id: int,
         db: AsyncSession = Depends(get_db),
 ):
-    post = await db.get(Post, post_id)
-
-    if not post:
-        logger.warning(f"post {post_id} not found")
+    result = await service.get_likes_count(post_id=post_id, db=db)
+    if not result:
         raise HTTPException(status_code=404, detail="Post not found")
 
-    query = select(func.count(Like.id)).where(Like.post_id == post_id)
-    result = await db.execute(query)
-    count = result.scalar()
-
-    return LikeCountResponse(post_id=post_id, count=count)
+    return result
 
 
