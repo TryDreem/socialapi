@@ -1,13 +1,14 @@
 from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, func, text
+from sqlalchemy import select, desc, func, text, case
 import json
 from app.models import Like
 from app.schemas.post import PostResponse, PostCreate, PostUpdate, PostSortBy
 from app.models.user import User
 from app.models.post import Post
 from app.models.follow import Follow
+from app.models.comment import Comment
 
 from app.schemas.pagination import PaginatedResponse
 from app.core.redis import cache_get, cache_set, cache_pattern_delete
@@ -290,6 +291,55 @@ class PostService:
 
         offset = (page - 1) * page_size
 
+        base_posts = (
+            select(Post.id, Post.created_at)
+            .join(Follow, Post.user_id == Follow.following_id)
+            .where(Follow.follower_id == current_user.id)
+            .subquery()
+        )
+
+        likes_subq = (
+            select(
+                Like.post_id,
+                func.count().label("likes_count")
+            )
+            .where(Like.post_id.in_(select(base_posts.c.id)))
+            .group_by(Like.post_id)
+            .subquery()
+        )
+
+        comments_subq = (
+            select(
+                Comment.post_id,
+                func.count().label("comments_count")
+            )
+            .where(Comment.post_id.in_(select(base_posts.c.id)))
+            .group_by(Comment.post_id)
+            .subquery()
+        )
+
+        score = (
+            func.coalesce(likes_subq.c.likes_count, 0) * 3 +
+            func.coalesce(comments_subq.c.comments_count, 0) * 5 -
+            func.extract('epoch', func.now() - Post.created_at) / 3600 * 0.1
+        ).label("score")
+
+
+        query = (
+            select(
+                Post,
+                func.coalesce(likes_subq.c.likes_count, 0).label("likes_count"),
+                func.coalesce(comments_subq.c.comments_count, 0).label("comments_count"),
+                score,
+            )
+            .join(base_posts, Post.id == base_posts.c.post_id)
+            .outerjoin(likes_subq, Post.id == likes_subq.c.post_id)
+            .outerjoin(comments_subq, Post.id == comments_subq.c.post_id)
+            .order_by(score.desc())
+            .limit(page_size)
+            .offset(offset)
+        )
+
         count_query = (
             select(func.count(Post.id))
             .join(Follow, Post.user_id == Follow.following_id)
@@ -298,23 +348,16 @@ class PostService:
 
         total = (await db.execute(count_query)).scalar()
 
-        query = (
-            select(Post, func.count(Like.id).label("like_count"))
-            .join(Follow, Post.user_id == Follow.following_id)
-            .outerjoin(Like, Post.id == Like.post_id)
-            .where(Follow.follower_id == current_user.id)
-            .group_by(Post.id)
-            .order_by(desc(Post.created_at))
-            .limit(page_size)
-            .offset(offset)
-        )
+
+
+
 
         result = await db.execute(query)
         rows = result.all()
 
         posts_data = []
 
-        for post, likes_count in rows:
+        for post, likes_count, comment_count, score in rows:
             posts_data.append({
                 "id": post.id,
                 "body": post.body,

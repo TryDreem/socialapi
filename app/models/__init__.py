@@ -3,5 +3,6 @@ from app.models.user import User
 from app.models.post import Post
 from app.models.comment import Comment
 from app.models.follow import Follow
+from app.models.notification import Notification
 
-__all__ = ["User", "Post", "Comment", "Like", "Follow"]
+__all__ = ["User", "Post", "Comment", "Like", "Follow", "Notification"]

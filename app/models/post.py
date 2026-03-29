@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from app.models.user import User
     from app.models.comment import Comment
     from app.models.like import Like
+    from app.models.notification import Notification
 
 
 
@@ -38,6 +39,8 @@ class Post(Base):
     comments: Mapped[list["Comment"]] = relationship(back_populates="post", cascade="all, delete-orphan")
 
     likes: Mapped[list["Like"]] = relationship(back_populates="post", cascade="all, delete-orphan")
+
+    notifications: Mapped[list["Notification"]] = relationship(back_populates="post", cascade="all, delete-orphan")
 
 
     def __repr__(self) -> str:
