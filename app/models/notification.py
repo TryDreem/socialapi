@@ -1,7 +1,6 @@
 from datetime import datetime
-from sqlalchemy import Integer, String, Boolean, ForeignKey
+from sqlalchemy import Boolean, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.util.typing import de_optionalize_fwd_ref_union_types
 import enum
 
 from app.database import Base
@@ -9,9 +8,6 @@ from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from app.models.post import Post
-    from app.models.comment import Comment
-    from app.models.like import Like
-    from app.models.follow import Follow
     from app.models.user import User
 
 class NotificationType(str, enum.Enum):

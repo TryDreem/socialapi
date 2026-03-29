@@ -39,7 +39,7 @@ class User(Base):
 
     following: Mapped[list["Follow"]] = relationship(foreign_keys="Follow.follower_id",back_populates="following")
 
-    notifications: Mapped[list["Notification"]] = relationship(back_populates="user",cascade="all, delete-orphan")
+    notifications: Mapped[list["Notification"]] = relationship(foreign_keys="Notification.user_id",back_populates="user",cascade="all, delete-orphan")
 
     def __repr__(self):
             return f"<User(id={self.id}, email={self.email})>"
