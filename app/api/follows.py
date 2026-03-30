@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends,Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.models import Follow
@@ -9,6 +9,7 @@ from app.schemas.follow import FollowResponse, FollowersResponse
 from app.models.user import User
 from app.core.rate_limit import limiter
 from app.api.deps import get_current_user
+from app.tasks.notifications import create_notification_task
 
 import logging
 
@@ -44,6 +45,11 @@ async def create_follow(
         db.add(db_follow)
         await db.commit()
         await db.refresh(db_follow)
+        create_notification_task.delay(
+            user_id=user_id,
+            actor_id=current_user.id,
+            type = "follow",
+        )
 
     except IntegrityError:
         logger.warning(f"User {user_id} already followed")

@@ -8,6 +8,8 @@ from app.models.user import User
 from app.models.comment import Comment
 import logging
 
+from app.tasks.notifications import create_notification_task
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,6 +35,12 @@ class CommentService:
 
         await db.commit()
         await db.refresh(db_comment)
+        create_notification_task.delay(
+            user_id = post.user_id,
+            actor_id = current_user.id,
+            type = "comment",
+            post_id = post.id,
+        )
 
         return CommentResponse.model_validate(db_comment)
 

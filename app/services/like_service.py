@@ -9,6 +9,8 @@ from app.models.user import User
 
 import logging
 
+from app.tasks.notifications import create_notification_task
+
 logger = logging.getLogger(__name__)
 
 class LikeService:
@@ -28,6 +30,12 @@ class LikeService:
             db.add(db_like)
             await db.commit()
             await db.refresh(db_like)
+            create_notification_task.delay(
+                user_id=post.user_id,
+                actor_id=current_user.id,
+                type='like',
+                post_id=post.id,
+            )
 
         except IntegrityError:
             await db.rollback()
