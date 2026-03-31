@@ -1,5 +1,5 @@
 from typing import Optional
-from app.services.notification_service import create_notification
+from app.services.notification_service import service
 from app.celery_app import celery_app
 import logging
 import asyncio
@@ -20,7 +20,7 @@ def create_notification_task(
         type: str,
         post_id: Optional[int]
 ):
-    result = asyncio.run(create_notification(user_id=user_id,actor_id=actor_id,type=type,post_id=post_id))
+    result = asyncio.run(service.create_notification(user_id=user_id,actor_id=actor_id,type=type,post_id=post_id))
     if not result:
         raise self.retry()
     return result

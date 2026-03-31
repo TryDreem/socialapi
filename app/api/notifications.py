@@ -1,32 +1,19 @@
-from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends, Request, Query
+from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, func, text, case
-import json
-from typing import List
-
 from app.api.deps import get_current_user
-from app.models import Like
 from app.schemas.notification import NotificationResponse
-from app.schemas.post import PostResponse, PostCreate, PostUpdate, PostSortBy
 from app.models.user import User
-from app.models.post import Post
-from app.models.follow import Follow
-from app.models.comment import Comment
 from app.database import get_db
 from app.schemas.pagination import PaginatedResponse
-from app.core.redis import cache_get, cache_set, cache_pattern_delete
-from fastapi.encoders import jsonable_encoder
-
+from app.services.notification_service import service
 import logging
 
-from app.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/notification", tags=["notification"])
 
-service = NotificationService()
+
 
 
 @router.get("", response_model=PaginatedResponse[NotificationResponse], status_code=200)
