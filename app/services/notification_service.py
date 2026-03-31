@@ -33,8 +33,8 @@ class NotificationService:
                     "type": notification.type,
                     "actor_id": notification.actor_id,
                     "post_id": notification.post_id,
-                }
-                                           )
+                    }
+                )
 
                 return True
 

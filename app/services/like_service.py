@@ -5,11 +5,12 @@ from sqlalchemy.exc import IntegrityError
 from app.models import Post, Like
 from app.schemas.like import LikeResponse, LikeCountResponse
 from app.models.user import User
-
+from app.services.notification_service import service
 
 import logging
 
-from app.tasks.notifications import create_notification_task
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class LikeService:
             db.add(db_like)
             await db.commit()
             await db.refresh(db_like)
-            create_notification_task.delay(
+            await service.create_notification(
                 user_id=post.user_id,
                 actor_id=current_user.id,
                 type='like',

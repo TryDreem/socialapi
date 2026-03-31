@@ -13,7 +13,6 @@ from app.services.like_service import LikeService
 
 import logging
 
-from app.services.post_service import PostService
 
 logger = logging.getLogger(__name__)
 service = LikeService()

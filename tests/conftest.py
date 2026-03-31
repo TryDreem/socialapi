@@ -90,9 +90,10 @@ async def mock_redis():
          patch("app.services.post_service.cache_set", new_callable=AsyncMock), \
          patch("app.services.post_service.cache_pattern_delete", new_callable=AsyncMock), \
          patch("app.api.auth.set_refresh_token", new_callable=AsyncMock), \
-         patch("app.services.comment_service.create_notification_task"), \
-         patch("app.services.like_service.create_notification_task"), \
-         patch("app.api.auth.send_confirmation_email_task") as mock_task:
+         patch("app.services.comment_service.service.create_notification", new_callable=AsyncMock), \
+         patch("app.services.like_service.service.create_notification", new_callable=AsyncMock), \
+         patch("app.api.follows.service.create_notification", new_callable=AsyncMock), \
+            patch("app.api.auth.send_confirmation_email_task") as mock_task:
              mock_task.delay = MagicMock()
              yield
 

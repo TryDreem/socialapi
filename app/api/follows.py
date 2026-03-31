@@ -9,7 +9,7 @@ from app.schemas.follow import FollowResponse, FollowersResponse
 from app.models.user import User
 from app.core.rate_limit import limiter
 from app.api.deps import get_current_user
-from app.tasks.notifications import create_notification_task
+from app.services.notification_service import service
 
 import logging
 
@@ -45,10 +45,11 @@ async def create_follow(
         db.add(db_follow)
         await db.commit()
         await db.refresh(db_follow)
-        create_notification_task.delay(
+        await service.create_notification(
             user_id=user_id,
             actor_id=current_user.id,
             type = "follow",
+            post_id=None
         )
 
     except IntegrityError:

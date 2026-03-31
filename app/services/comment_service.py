@@ -7,8 +7,7 @@ from app.schemas.comment import CommentResponse, CommentCreate
 from app.models.user import User
 from app.models.comment import Comment
 import logging
-
-from app.tasks.notifications import create_notification_task
+from app.services.notification_service import service
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ class CommentService:
 
         await db.commit()
         await db.refresh(db_comment)
-        create_notification_task.delay(
+        await service.create_notification(
             user_id = post.user_id,
             actor_id = current_user.id,
             type = "comment",
