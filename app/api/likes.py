@@ -1,10 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends,Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from sqlalchemy import select, func
-from sqlalchemy.exc import IntegrityError
-
-from app.models import Post, Like
 from app.schemas.like import LikeResponse, LikeCountResponse
 from app.models.user import User
 from app.core.rate_limit import limiter

@@ -92,7 +92,7 @@ async def mock_redis():
          patch("app.api.auth.set_refresh_token", new_callable=AsyncMock), \
          patch("app.services.comment_service.service.create_notification", new_callable=AsyncMock), \
          patch("app.services.like_service.service.create_notification", new_callable=AsyncMock), \
-         patch("app.api.follows.service.create_notification", new_callable=AsyncMock), \
+         patch("app.services.follow_service.service.create_notification", new_callable=AsyncMock), \
             patch("app.api.auth.send_confirmation_email_task") as mock_task:
              mock_task.delay = MagicMock()
              yield
@@ -111,6 +111,17 @@ async def test_user(client):
     return user_data
 
 
+@pytest_asyncio.fixture
+async def test_user2(client):
+    user_data = {
+        "email": "test2@gmail.com",
+        "password": "12345678",
+    }
+
+    response = await client.post("/auth/register", json=user_data)
+    assert response.status_code == 201
+    return user_data
+
 
 @pytest_asyncio.fixture
 async def auth_headers(client, test_user, db_session):
@@ -125,6 +136,20 @@ async def auth_headers(client, test_user, db_session):
     assert response.status_code == 200
     token = response.json()["access_token"]
 
+    return {"Authorization": f"Bearer {token}"}
+
+@pytest_asyncio.fixture
+async def auth_headers2(client, test_user2, db_session):
+    from app.models.user import User
+    from sqlalchemy import update
+
+    query = update(User).where(User.email == test_user2["email"]).values(is_confirmed=True)
+    await db_session.execute(query)
+    await db_session.commit()
+
+    response = await client.post("/auth/login", json=test_user2)
+    assert response.status_code == 200
+    token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
 
