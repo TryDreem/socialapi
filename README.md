@@ -1,8 +1,10 @@
 # SocialAPI
 
-A production-ready RESTful API for a microblogging platform built with **FastAPI** and modern async Python stack.
+A production-ready REST API for a microblogging platform built with **FastAPI** and a modern async Python stack. Features a smart ranking feed, real-time WebSocket notifications, and a clean layered architecture.
 
-> Live demo: [https://socialapi-wbc3.onrender.com/docs](https://socialapi-wbc3.onrender.com/docs)
+> 🚀 **Live demo:** [https://socialapi-wbc3.onrender.com/docs](https://socialapi-wbc3.onrender.com/docs)
+>
+> 👤 **Author:** Vladyslav Akulov — [GitHub](https://github.com/TryDreem)
 
 ---
 
@@ -16,6 +18,7 @@ A production-ready RESTful API for a microblogging platform built with **FastAPI
 | Caching | Redis |
 | Auth | JWT (access + refresh tokens) |
 | Background Tasks | Celery + Redis broker |
+| Real-time | WebSockets |
 | Email | Mailgun API |
 | Containerization | Docker + Docker Compose |
 | Reverse Proxy | Nginx |
@@ -43,15 +46,19 @@ FastAPI (uvicorn, port 8000)
 
 ### Key architectural decisions
 
+**Layered architecture** — Routers handle HTTP, Services contain business logic, keeping the codebase clean and testable.
+
 **Async throughout** — FastAPI + asyncpg + SQLAlchemy async engine. Every database call is non-blocking, allowing high concurrency without thread overhead.
 
 **Redis dual-purpose** — used both for response caching (posts, feed, search) with 5-minute TTL and for refresh token storage with 7-day TTL. Cache invalidation is pattern-based (`cache:posts:*`) on any write operation.
 
 **JWT with refresh tokens** — short-lived access tokens (30 min) stored client-side, long-lived refresh tokens (7 days) stored in Redis. Logout invalidates the refresh token server-side.
 
-**Celery for email** — confirmation emails are dispatched as background tasks via Celery so the registration endpoint returns immediately without waiting for the Mailgun API.
+**Ranking Feed** — feed is not sorted by date but by an engagement score formula: `likes * 3 + comments * 5 - hours_since_posted * 0.1`. Subqueries are used to avoid cartesian product bugs when joining multiple tables.
 
-**Service layer** — business logic is separated from HTTP routing (but partially). Routers handle request/response, services handle data access and caching logic.
+**Real-time notifications** — WebSocket connections are managed by a `ConnectionManager` class that maps `user_id → WebSocket`. When a like or comment is created, the notification is pushed instantly to the connected user.
+
+**Celery for email** — confirmation emails are dispatched as background tasks via Celery so the registration endpoint returns immediately without waiting for the Mailgun API.
 
 ---
 
@@ -61,19 +68,14 @@ FastAPI (uvicorn, port 8000)
 users
   │
   ├──< posts (user_id → users.id)
-  │     └──< likes   (post_id → posts.id, user_id → users.id)
-  │     └──< comments (post_id → posts.id, user_id → users.id)
+  │     └──< likes      (post_id → posts.id, user_id → users.id)
+  │     └──< comments   (post_id → posts.id, user_id → users.id)
+  │     └──< notifications (post_id → posts.id)
   │
-  └──< follows (follower_id → users.id, following_id → users.id)
+  ├──< follows (follower_id → users.id, following_id → users.id)
+  │
+  └──< notifications (user_id → users.id, actor_id → users.id)
 ```
-
-### Tables
-
-- **users** — email, hashed password, email confirmation status
-- **posts** — body (max 500 chars), author reference, timestamps
-- **likes** — unique constraint on (user_id, post_id) prevents duplicate likes
-- **comments** — body (max 500 chars), references to post and author
-- **follows** — composite primary key (follower_id, following_id), self-referential on users
 
 ---
 
@@ -119,7 +121,18 @@ users
 | POST | `/users/{id}/follow` | ✅ | Follow user |
 | DELETE | `/users/{id}/follow` | ✅ | Unfollow user |
 | GET | `/users/{id}/followers` | ❌ | Get followers list |
-| GET | `/feed` | ✅ | Get feed from followed users |
+| GET | `/feed` | ✅ | Get ranked feed from followed users |
+
+### Notifications
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/notification` | ✅ | Get notifications (paginated) |
+| PATCH | `/notification/{id}/read` | ✅ | Mark notification as read |
+
+### Real-time
+| Protocol | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| WebSocket | `/ws?token=...` | ✅ | Real-time notifications |
 
 ---
 
@@ -147,6 +160,14 @@ docker-compose up --build
 # http://localhost/docs
 ```
 
+### Seed the database (optional)
+
+```bash
+python seed.py
+```
+
+Creates 5 users, posts, comments, likes and follows for demo purposes.
+
 ### Environment variables
 
 ```env
@@ -171,6 +192,9 @@ REFRESH_TOKEN_EXPIRE_DAYS=7
 
 ```bash
 pytest tests/ -v
+
+# With coverage
+pytest --cov=app tests/ -v
 ```
 
 ---
@@ -179,8 +203,12 @@ pytest tests/ -v
 
 - **Async API** — fully async stack with FastAPI + asyncpg
 - **JWT Authentication** — access/refresh token pair with Redis-backed invalidation
+- **Layered Architecture** — clean separation between routers, services, and database layer
+- **Ranking Feed** — engagement-based scoring algorithm (likes, comments, recency)
+- **Real-time WebSockets** — instant push notifications when someone likes or comments
 - **Redis Caching** — posts, feed, and search results cached with automatic invalidation
 - **Follow System** — follow/unfollow users, personalized feed
+- **Notification System** — like, comment, and follow notifications with read/unread status
 - **Post Search** — case-insensitive full-text search with sorting and pagination
 - **Rate Limiting** — per-endpoint rate limits via SlowAPI
 - **Background Email** — async email delivery via Celery + Mailgun
@@ -195,6 +223,6 @@ Results with k6 (100 VUs, 2.5 minutes):
 
 | Metric | Result |
 |--------|--------|
-| Requests/sec | 1054 |
-| Avg response time | 46ms |
+| Requests/sec | ~49 |
+| Avg response time | ~11 ms |
 | Failed requests | 0% |
