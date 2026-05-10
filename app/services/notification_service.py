@@ -13,34 +13,32 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationService:
-    async def create_notification(self, user_id, actor_id, type, post_id):
-        logger.info(f"Creating notification for user {user_id} with type {type}")
+    async def create_notification(self, db: AsyncSession, user_id, actor_id, notification_type, post_id):
+        logger.info(f"Creating notification for user {user_id} with type {notification_type}")
 
         try:
-            async with AsyncSessionLocal() as db:
+            notification = Notification(
+                user_id=user_id,
+                actor_id=actor_id,
+                type=notification_type,
+                post_id=post_id,
+            )
 
-                notification = Notification(
-                    user_id=user_id,
-                    actor_id=actor_id,
-                    type=type,
-                    post_id=post_id,
-                )
+            db.add(notification)
+            await db.commit()
+            await db.refresh(notification)
+            await manager.send_to_user(notification.user_id, message={
+                "type": notification.type,
+                "actor_id": notification.actor_id,
+                "post_id": notification.post_id,
+                }
+            )
 
-                db.add(notification)
-                await db.commit()
-                await db.refresh(notification)
-                await manager.send_to_user(notification.user_id, message={
-                    "type": notification.type,
-                    "actor_id": notification.actor_id,
-                    "post_id": notification.post_id,
-                    }
-                )
-
-                return True
+            return True
 
         except Exception as e:
-            logger.warning(f"Failed to create notification for user {user_id} with type {type}: {e}")
-            return False
+                logger.warning(f"Failed to create notification for user {user_id} with type {notification_type}: {e}")
+                return False
 
     async def get_all_notifications(self, page: int, page_size: int, current_user: User, db: AsyncSession):
         logger.info(f"Getting all notifications for user {current_user.id}")

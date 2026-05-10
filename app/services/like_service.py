@@ -29,9 +29,10 @@ class LikeService:
             await db.commit()
             await db.refresh(db_like)
             await service.create_notification(
+                db=db,
                 user_id=post.user_id,
                 actor_id=current_user.id,
-                type='like',
+                notification_type='like',
                 post_id=post.id,
             )
 

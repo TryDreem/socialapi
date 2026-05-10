@@ -36,9 +36,10 @@ class FollowService:
             await db.commit()
             await db.refresh(db_follow)
             await service.create_notification(
+                db=db,
                 user_id=user_id,
                 actor_id=current_user.id,
-                type = "follow",
+                notification_type = "follow",
                 post_id=None
             )
 
