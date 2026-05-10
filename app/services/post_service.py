@@ -2,7 +2,6 @@ from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func, text, case
-import json
 from app.models import Like
 from app.schemas.post import PostResponse, PostCreate, PostUpdate, PostSortBy
 from app.models.user import User
@@ -13,7 +12,9 @@ from app.models.comment import Comment
 from app.schemas.pagination import PaginatedResponse
 from app.core.redis import cache_get, cache_set, cache_pattern_delete
 from fastapi.encoders import jsonable_encoder
+from app.repositories.post_repository import post_repository
 
+import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -26,12 +27,9 @@ class PostService:
             user_id=current_user.id,
         )
 
-        db.add(db_post)
+        await post_repository.create(db, db_post)
 
         logger.info(f"Post created by {current_user.id}")
-
-        await db.commit()
-        await db.refresh(db_post)
 
         await cache_pattern_delete("cache:posts:*")
         logger.info(f"Cache pattern cleared in Redis")
@@ -49,13 +47,7 @@ class PostService:
             logger.info(f"Searched posts found in cache")
             return json.loads(cached)
 
-        count_query = (
-            select(func.count(Post.id))
-            .where(Post.body.like(f"%{q}%"))
-        )
-        total_result = await db.execute(count_query)
-        total = total_result.scalar()
-
+        total = await post_repository.count_search(db, q)
 
         offset = (page - 1) * page_size
 
@@ -66,18 +58,7 @@ class PostService:
         else:
             order_clause = desc(text("likes_count"))
 
-        query = (
-            select(Post, func.count(Like.id).label("likes_count"))
-            .where(Post.body.ilike(f"%{q}%"))
-            .outerjoin(Like, Post.id == Like.post_id)
-            .group_by(Post.id)
-            .order_by(order_clause)
-            .limit(page_size)
-            .offset(offset)
-        )
-
-        result = await db.execute(query)
-        rows = result.all()
+        rows = await post_repository.search(db, order_clause, page_size, offset, q)
 
         posts_data = []
         for post, likes_count in rows:
@@ -118,12 +99,9 @@ class PostService:
             logger.info(f"Found cached posts (page={page}, page_size={page_size})")
             return json.loads(cached_posts)
 
-        count_query = select(func.count(Post.id))
-        total_result = await db.execute(count_query)
-        total = total_result.scalar()
+        total = await post_repository.count_all(db)
 
         offset = (page - 1) * page_size
-
 
         if sort_by == PostSortBy.newest:
             order_clause = desc(Post.created_at)
@@ -132,17 +110,7 @@ class PostService:
         else:
             order_clause = desc(text("likes_count"))
 
-
-        query = (
-            select(Post, func.count(Like.id).label("likes_count")) #COUNT(likes.id) AS likes_count
-            .outerjoin(Like, Post.id == Like.post_id)
-            .group_by(Post.id)
-            .order_by(order_clause)
-            .limit(page_size)
-            .offset(offset)
-        )
-        result = await db.execute(query)
-        rows = result.all()
+        rows = await post_repository.get_all(db, order_clause, page_size, offset)
 
         post_data = []
         for post, likes_count in rows:
@@ -186,16 +154,7 @@ class PostService:
             logger.info(f"Found cached post with id {post_id}")
             return PostResponse(**json.loads(cached))
 
-
-        query = (
-            select(Post, func.count(Like.id).label("likes_count")) #COUNT(likes.id) AS likes_count
-            .outerjoin(Like, Post.id == Like.post_id)
-            .where(Post.id == post_id)
-            .group_by(Post.id)
-        )
-
-        result = await db.execute(query)
-        row = result.first()
+        row = await post_repository.get_by_id(db, post_id)
 
         if not row:
             logger.warning(f"Post with id {post_id} not found")
@@ -224,9 +183,8 @@ class PostService:
 
         logger.info(f"Deleting post with id {post_id}")
 
-        query = select(Post).where(Post.id == post_id)
-        result = await db.execute(query)
-        post = result.scalar_one_or_none()
+        post = await post_repository.get_simple(db, post_id)
+
         if not post:
             logger.warning(f"Post with id {post_id} not found")
             return "Post not found"
@@ -235,8 +193,7 @@ class PostService:
             logger.warning(f"User {current_user.id} tried to delete post {post_id} of user {post.user_id}")
             return "forbidden"
 
-        await db.delete(post)
-        await db.commit()
+        await post_repository.delete(db, post)
 
         logger.info(f"Deleted post with id {post_id}")
 
@@ -270,8 +227,7 @@ class PostService:
 
         post.updated_at = datetime.now()
 
-        await db.commit()
-        await db.refresh(post)
+        await post_repository.update(db, post)
 
         await cache_pattern_delete("cache:posts:*")
         logger.info(f"Cache pattern cleared in Redis")
@@ -291,69 +247,8 @@ class PostService:
 
         offset = (page - 1) * page_size
 
-        base_posts = (
-            select(Post.id, Post.created_at)
-            .join(Follow, Post.user_id == Follow.following_id)
-            .where(Follow.follower_id == current_user.id)
-            .subquery()
-        )
-
-        likes_subq = (
-            select(
-                Like.post_id,
-                func.count().label("likes_count")
-            )
-            .where(Like.post_id.in_(select(base_posts.c.id)))
-            .group_by(Like.post_id)
-            .subquery()
-        )
-
-        comments_subq = (
-            select(
-                Comment.post_id,
-                func.count().label("comments_count")
-            )
-            .where(Comment.post_id.in_(select(base_posts.c.id)))
-            .group_by(Comment.post_id)
-            .subquery()
-        )
-
-        score = (
-            func.coalesce(likes_subq.c.likes_count, 0) * 3 +
-            func.coalesce(comments_subq.c.comments_count, 0) * 5 -
-            func.extract('epoch', func.now() - Post.created_at) / 3600 * 0.1
-        ).label("score")
-
-
-        query = (
-            select(
-                Post,
-                func.coalesce(likes_subq.c.likes_count, 0).label("likes_count"),
-                func.coalesce(comments_subq.c.comments_count, 0).label("comments_count"),
-                score,
-            )
-            .join(base_posts, Post.id == base_posts.c.post_id)
-            .outerjoin(likes_subq, Post.id == likes_subq.c.post_id)
-            .outerjoin(comments_subq, Post.id == comments_subq.c.post_id)
-            .order_by(score.desc())
-            .limit(page_size)
-            .offset(offset)
-        )
-
-        count_query = (
-            select(func.count(Post.id))
-            .join(Follow, Post.user_id == Follow.following_id)
-            .where(Follow.follower_id == current_user.id)
-        )
-
-        total = (await db.execute(count_query)).scalar()
-
-
-
-
-
-        result = await db.execute(query)
-        rows = result.all()
+        rows = await post_repository.get_feed(db, current_user, page_size, offset)
+        total = await post_repository.get_feed_count(db, current_user)
 
         posts_data = []
 
@@ -380,3 +275,4 @@ class PostService:
         await cache_set(cache_key, json.dumps(jsonable_encoder(response)))
 
         return response
+

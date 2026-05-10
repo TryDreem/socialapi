@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from app.repositories import comment_repository
 from app.schemas.pagination import PaginatedResponse
 
 from app.models import Post
@@ -8,6 +8,7 @@ from app.models.user import User
 from app.models.comment import Comment
 import logging
 from app.services.notification_service import service
+from app.repositories.comment_repository import comment_repository
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +29,10 @@ class CommentService:
             post_id=post_id,
         )
 
-        db.add(db_comment)
-
         logger.info(f"Comment created by {current_user.id}")
 
-        await db.commit()
-        await db.refresh(db_comment)
+        await comment_repository.create(db, db_comment)
+
         await service.create_notification(
             user_id = post.user_id,
             actor_id = current_user.id,
@@ -56,19 +55,8 @@ class CommentService:
 
         offset = (page - 1) * page_size
 
-        count_query = select(func.count(Comment.id)).where(Comment.post_id==post_id)
-        total_result = await db.execute(count_query)
-        total = total_result.scalar()
-
-        query = (select(Comment)
-                 .where(Comment.post_id==post_id)
-                 .order_by(Comment.created_at)
-                 .limit(page_size)
-                 .offset(offset)
-                 )
-
-        result = await db.execute(query)
-        comments = result.scalars().all()
+        total = await comment_repository.get_total_count(db, post_id)
+        comments = await comment_repository.get_all(db, post_id, page_size, offset)
 
         comments_data = [CommentResponse.model_validate(c) for c in comments]
 
@@ -82,7 +70,7 @@ class CommentService:
             total_pages=total_pages
         )
 
-    async def delete_comment(self, post_id: int, comment_id: int, db: AsyncSession, current_user: User):
+    async def delete_comment(self, post_id: int, comment_id: User, db: AsyncSession, current_user: User):
 
         comment = await db.get(Comment, comment_id)
 
@@ -94,8 +82,7 @@ class CommentService:
             logger.warning(f"User {current_user.id} tried to delete post {comment_id} of user {comment.user_id}")
             return "forbidden"
 
-        await db.delete(comment)
-        await db.commit()
+        await comment_repository.delete(db, comment)
 
         logger.info(f"Comment deleted by {current_user.id}")
 

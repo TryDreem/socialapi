@@ -22,7 +22,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=UserResponse, status_code=201)
 @limiter.limit("5/hour")
-async def register(request: Request, user: UserRegister,db: AsyncSession = Depends(get_db)):
+async def register(request: Request, user: UserRegister,db: AsyncSession = Depends(get_db)) -> UserResponse:
 
     logger.info(f"📝 Registration attempt for {mask_email(user.email)}")
 
