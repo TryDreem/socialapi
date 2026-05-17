@@ -20,6 +20,7 @@ A production-ready REST API for a microblogging platform built with **FastAPI** 
 | Background Tasks | Celery + Redis broker |
 | Real-time | WebSockets |
 | Email | Mailgun API |
+| File Storage | Supabase Storage (S3-compatible) |
 | Containerization | Docker + Docker Compose |
 | Reverse Proxy | Nginx |
 | CI/CD | GitHub Actions |
@@ -36,12 +37,14 @@ Nginx (reverse proxy, port 80)
   │
   ▼
 FastAPI (uvicorn, port 8000)
-  │
-  ├──► PostgreSQL (persistent data)
-  │
-  ├──► Redis (caching + refresh tokens)
-  │
-  └──► Celery Worker ──► Mailgun (email delivery)
+│
+├──► PostgreSQL (persistent data)
+│
+├──► Redis (caching + refresh tokens)
+│
+├──► Supabase Storage (file uploads)
+│
+└──► Celery Worker ──► Mailgun (email delivery)
 ```
 
 ### Key architectural decisions
@@ -59,6 +62,8 @@ FastAPI (uvicorn, port 8000)
 **Real-time notifications** — WebSocket connections are managed by a `ConnectionManager` class that maps `user_id → WebSocket`. When a like or comment is created, the notification is pushed instantly to the connected user.
 
 **Celery for email** — confirmation emails are dispatched as background tasks via Celery so the registration endpoint returns immediately without waiting for the Mailgun API.
+
+**File uploads** — images are uploaded to Supabase Storage via S3-compatible API using aioboto3. Two-step flow: upload image first, get URL, then create post with that URL. Files are automatically deleted from storage when a post is deleted.
 
 ---
 
@@ -129,6 +134,11 @@ users
 | GET | `/notification` | ✅ | Get notifications (paginated) |
 | PATCH | `/notification/{id}/read` | ✅ | Mark notification as read |
 
+### Upload
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/upload/image` | ✅ | Upload image, returns public URL |
+
 ### Real-time
 | Protocol | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
@@ -180,6 +190,12 @@ MAILGUN_API_KEY=your-mailgun-api-key
 MAILGUN_DOMAIN=your-mailgun-domain
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_DAYS=7
+SUPABASE_ENDPOINT=https://your-project.storage.supabase.co/storage/v1/s3
+SUPABASE_REGION=eu-north-1
+SUPABASE_BUCKET=post-media
+SUPABASE_ACCESS_KEY_ID=your-access-key
+SUPABASE_SECRET_ACCESS_KEY=your-secret-key
+SUPABASE_PUBLIC_URL=https://your-project.supabase.co
 ```
 
 > **Note:** Email confirmation requires Mailgun credentials.
@@ -212,6 +228,7 @@ pytest --cov=app tests/ -v
 - **Post Search** — case-insensitive full-text search with sorting and pagination
 - **Rate Limiting** — per-endpoint rate limits via SlowAPI
 - **Background Email** — async email delivery via Celery + Mailgun
+- **File Uploads** — image upload to Supabase Storage (S3-compatible) with type and size validation, automatic cleanup on post deletion
 - **Pagination** — all list endpoints support page/page_size parameters
 - **Sorting** — posts sortable by newest, oldest, most liked
 

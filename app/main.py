@@ -7,7 +7,7 @@ from app.core.rate_limit import limiter
 from app.database import engine
 from sqlalchemy import text
 from app.config import settings
-from app.api import auth, posts, comments, likes, follows, notifications, websockets
+from app.api import auth, posts, comments, likes, follows, notifications, websockets, upload
 from app.core.logging_config import setup_logging
 
 app = FastAPI(
@@ -31,6 +31,7 @@ all_routers = [
     feed_router,
     notifications.router,
     websockets.router,
+    upload.router
 ]
 
 for router in all_routers:

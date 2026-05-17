@@ -29,6 +29,7 @@ class Post(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     body: Mapped[str] = mapped_column(String(500))
+    image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True, default=None)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[Optional[datetime]] = mapped_column(default=None, onupdate=datetime.utcnow)

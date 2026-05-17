@@ -46,7 +46,7 @@ async def get_all_posts(
         page_size: int = Query(20, ge=1, le=100, description="Page size"),
         sort_by: PostSortBy = Query(PostSortBy.most_liked),
         db: AsyncSession = Depends(get_db)
-        #ge greater or equal (>=1)
+        #ge greater or equal (>=1)н
 ):
     return await service.get_all_posts(page=page, page_size=page_size, sort_by=sort_by, db=db)
 

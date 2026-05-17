@@ -1,7 +1,7 @@
 from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, func, text, case
+from sqlalchemy import select, desc, func, text
 import json
 from app.models import Like
 from app.schemas.post import PostResponse, PostCreate, PostUpdate, PostSortBy
@@ -9,20 +9,22 @@ from app.models.user import User
 from app.models.post import Post
 from app.models.follow import Follow
 from app.models.comment import Comment
-
 from app.schemas.pagination import PaginatedResponse
 from app.core.redis import cache_get, cache_set, cache_pattern_delete
 from fastapi.encoders import jsonable_encoder
+from app.services.storage_service import StorageService
 
 import logging
 
 logger = logging.getLogger(__name__)
+service = StorageService()
 
 
 class PostService:
     async def create_post(self, post: PostCreate, current_user: User, db: AsyncSession):
         db_post = Post(
             body=post.body,
+            image_url=post.image_url,
             user_id=current_user.id,
         )
 
@@ -84,6 +86,7 @@ class PostService:
             post_dict = {
                 "id": post.id,
                 "body": post.body,
+                "image_url": post.image_url,
                 "user_id": post.user_id,
                 "created_at": post.created_at,
                 "updated_at": post.updated_at,
@@ -149,6 +152,7 @@ class PostService:
             post_dict = {
                 "id": post.id,
                 "body": post.body,
+                "image_url": post.image_url,
                 "user_id": post.user_id,
                 "created_at": post.created_at,
                 "updated_at": post.updated_at,
@@ -206,6 +210,7 @@ class PostService:
         post_dict = {
             "id": post.id,
             "body": post.body,
+            "image_url": post.image_url,
             "user_id": post.user_id,
             "created_at": post.created_at,
             "updated_at": post.updated_at,
@@ -234,6 +239,9 @@ class PostService:
         if post.user_id != current_user.id:
             logger.warning(f"User {current_user.id} tried to delete post {post_id} of user {post.user_id}")
             return "forbidden"
+
+        if post.image_url:
+            await service.delete_file(post.image_url)
 
         await db.delete(post)
         await db.commit()
@@ -361,6 +369,7 @@ class PostService:
             posts_data.append({
                 "id": post.id,
                 "body": post.body,
+                "image_url": post.image_url,
                 "user_id": post.user_id,
                 "created_at": post.created_at,
                 "updated_at": post.updated_at,

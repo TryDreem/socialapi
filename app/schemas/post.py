@@ -1,11 +1,12 @@
 from pydantic import BaseModel, EmailStr, field_validator, ConfigDict, ValidationError
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 from enum import Enum
 
 
 class PostCreate(BaseModel):
     body : str
+    image_url: Optional[str] = None
 
     @field_validator("body")
     @classmethod
@@ -23,6 +24,7 @@ class PostUpdate(BaseModel):
 class PostResponse(BaseModel):
     id: int
     body: str
+    image_url: Optional[str] = None
     user_id: int
     likes_count: int = 0
     created_at: datetime

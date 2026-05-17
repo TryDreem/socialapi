@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     MAILGUN_API_KEY: Optional[str] = None
     MAILGUN_DOMAIN: Optional[str] = None
 
+    SUPABASE_ENDPOINT: Optional[str] = None
+    SUPABASE_REGION: Optional[str] = None
+    SUPABASE_BUCKET: Optional[str] = None
+    SUPABASE_ACCESS_KEY_ID: Optional[str] = None
+    SUPABASE_SECRET_ACCESS_KEY: Optional[str] = None
+    
 
     model_config = SettingsConfigDict(
         env_file=".env",
